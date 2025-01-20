@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { initializeDriveWatcher } = require('./services/driveService');
 const { transcribeVideo } = require('./services/geminiService');
+const { testConnection } = require('./services/supabaseService');
 require('dotenv').config();
 
 const app = express();
@@ -90,9 +91,17 @@ io.on('connection', (socket) => {
 });
 
 // Add error handling for the server
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log('CORS allowed for:', io.opts.cors.origin);
+  
+  // Test Supabase connection before starting the watcher
+  const supabaseConnected = await testConnection();
+  if (!supabaseConnected) {
+    console.error('Failed to connect to Supabase. Shutting down...');
+    process.exit(1);
+  }
+  
   initializeDriveWatcher(io);
 }).on('error', (error) => {
   console.error('Server failed to start:', error);

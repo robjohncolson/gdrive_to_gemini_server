@@ -37,9 +37,40 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Add a health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
+// Replace the current health check endpoint with this:
+app.get('/health', async (req, res) => {
+  try {
+    // Check Supabase connection
+    const supabaseConnected = await testConnection();
+    if (!supabaseConnected) {
+      throw new Error('Supabase connection failed');
+    }
+
+    // Check Google Drive API auth
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY
+      ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+      : undefined;
+
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !privateKey) {
+      throw new Error('Google credentials not configured');
+    }
+
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        supabase: 'connected',
+        google: 'configured'
+      }
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Add a ping endpoint

@@ -2,12 +2,16 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const { initializeDriveWatcher } = require('./services/driveService');
-const { transcribeVideo } = require('./services/geminiService');
 const { testConnection } = require('./services/supabaseService');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+
+// Add ping endpoint first
+app.get('/ping', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 
 const allowedOrigins = [
   "https://gdrive-to-gemini-5srbzrkqy-roberts-projects-19fe2013.vercel.app",
@@ -31,90 +35,75 @@ app.use((req, res, next) => {
   next();
 });
 
-// Basic error handling middleware
+const PORT = process.env.PORT || 3000;
+
+// Start server first
+server.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Initialize Socket.IO after server is running
+  const io = new Server(server, {
+    cors: {
+      origin: allowedOrigins,
+      methods: ["GET", "POST"],
+      credentials: true,
+      allowedHeaders: ["Content-Type"]
+    },
+    path: '/socket.io/',
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    allowEIO3: true,
+    connectTimeout: 45000
+  });
+
+  // Socket.IO error handling
+  io.engine.on("connection_error", (err) => {
+    console.log("Connection error:", {
+      code: err.code,
+      message: err.message,
+      context: err.context
+    });
+  });
+
+  // Socket connection handling
+  io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+    socket.emit('connected', { status: 'ok' });
+  });
+
+  try {
+    await startServices(io);
+  } catch (error) {
+    console.error('Failed to start services:', error);
+    process.exit(1);
+  }
+}).on('error', (error) => {
+  console.error('Server failed to start:', error);
+  process.exit(1);
+});
+
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Add this immediately after creating the app
-app.get('/ping', (req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
-
-// Detailed Socket.IO setup
-const io = new Server(server, {
-  cors: {
-    origin: [
-      "https://gdrive-to-gemini-5srbzrkqy-roberts-projects-19fe2013.vercel.app",
-      "https://gdrive-to-gemini.vercel.app",
-      "http://localhost:5173"
-    ],
-    methods: ["GET", "POST"],
-    credentials: true,
-    allowedHeaders: ["Content-Type"]
-  },
-  path: '/socket.io/',
-  transports: ['websocket', 'polling'],
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  allowEIO3: true,
-  connectTimeout: 45000
-});
-
-// Add connection event logging
-io.engine.on("connection_error", (err) => {
-  console.log("Connection error:", {
-    req: err.req,
-    code: err.code,
-    message: err.message,
-    context: err.context
-  });
-});
-
-const PORT = process.env.PORT || 3000;
-
-// Add error handling for socket connections
-io.on('connection', (socket) => {
-  console.log('Client connected:', {
-    id: socket.id,
-    transport: socket.conn.transport.name,
-    headers: socket.handshake.headers,
-    query: socket.handshake.query
-  });
-  
-  socket.on('error', (error) => {
-    console.error('Socket error:', error);
-  });
-  
-  socket.on('disconnect', (reason) => {
-    console.log('Client disconnected:', {
-      id: socket.id,
-      reason: reason,
-      wasConnected: socket.connected
-    });
-  });
-
-  // Acknowledge connection
-  socket.emit('connected', { status: 'ok' });
-});
-
-// Add error handling for the server
-server.listen(PORT, async () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log('CORS allowed for:', io.opts.cors.origin);
-  
-  // Test Supabase connection before starting the watcher
-  const supabaseConnected = await testConnection();
-  if (!supabaseConnected) {
-    console.error('Failed to connect to Supabase. Shutting down...');
+// Move service initialization to separate function
+async function startServices(io) {
+  try {
+    const supabaseConnected = await testConnection();
+    if (!supabaseConnected) {
+      console.error('Failed to connect to Supabase');
+      process.exit(1);
+    }
+    
+    await initializeDriveWatcher(io);
+  } catch (error) {
+    console.error('Service initialization failed:', error);
     process.exit(1);
   }
-  
-  initializeDriveWatcher(io);
-}).on('error', (error) => {
-  console.error('Server failed to start:', error);
-});
+}
 
 // Global error handling
 process.on('uncaughtException', (error) => {

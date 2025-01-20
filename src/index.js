@@ -48,16 +48,11 @@ app.get('/ping', (req, res) => {
 // Detailed Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Origin"],
+    origin: "https://gdrive-to-gemini-5ox1cun5u-roberts-projects-19fe2013.vercel.app",
+    methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling'],
-  path: '/socket.io/',
-  allowEIO3: true,
-  pingTimeout: 60000,
-  pingInterval: 25000
+  path: '/socket.io/'
 });
 
 // Add connection event logging

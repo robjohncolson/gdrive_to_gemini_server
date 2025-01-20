@@ -73,9 +73,15 @@ server.listen(PORT, async () => {
   });
 
   try {
-    await startServices(io);
+    const supabaseConnected = await testConnection();
+    if (!supabaseConnected) {
+      console.error('Failed to connect to Supabase');
+      process.exit(1);
+    }
+    
+    await initializeDriveWatcher(io);
   } catch (error) {
-    console.error('Failed to start services:', error);
+    console.error('Service initialization failed:', error);
     process.exit(1);
   }
 }).on('error', (error) => {
@@ -88,22 +94,6 @@ app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(500).json({ error: 'Internal Server Error' });
 });
-
-// Move service initialization to separate function
-async function startServices(io) {
-  try {
-    const supabaseConnected = await testConnection();
-    if (!supabaseConnected) {
-      console.error('Failed to connect to Supabase');
-      process.exit(1);
-    }
-    
-    await initializeDriveWatcher(io);
-  } catch (error) {
-    console.error('Service initialization failed:', error);
-    process.exit(1);
-  }
-}
 
 // Global error handling
 process.on('uncaughtException', (error) => {

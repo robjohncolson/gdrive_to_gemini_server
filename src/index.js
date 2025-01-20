@@ -8,23 +8,24 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-// Update CORS configuration to handle multiple environments
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  'http://localhost:5173',
-  // Add your Vercel deployment URL here
-  'https://your-app.vercel.app'
-];
+// Basic error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
 
+// Add a health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// Detailed CORS setup
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: [
+      'http://localhost:5173',
+      'https://gdrive-to-gemini-6yrtipfzr-roberts-projects-19fe2013.vercel.app'
+    ],
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -32,16 +33,33 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
+// Add error handling for socket connections
 io.on('connection', (socket) => {
-  console.log('Client connected');
+  console.log('Client connected:', socket.id);
   
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
+  });
+  
+  socket.on('disconnect', (reason) => {
+    console.log('Client disconnected:', socket.id, 'Reason:', reason);
   });
 });
 
-// Start server
+// Add error handling for the server
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('CORS allowed for:', io.opts.cors.origin);
   initializeDriveWatcher(io);
+}).on('error', (error) => {
+  console.error('Server failed to start:', error);
+});
+
+// Global error handling
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 }); 

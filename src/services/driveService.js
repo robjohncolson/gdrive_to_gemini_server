@@ -3,16 +3,68 @@ const { JWT } = require('google-auth-library');
 const { transcribeVideo } = require('./geminiService');
 const { createTranscriptionRecord, updateTranscription } = require('./supabaseService');
 
-const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
-const POLLING_INTERVAL = process.env.POLLING_INTERVAL ? parseInt(process.env.POLLING_INTERVAL) : 300000;
+const SCOPES = [
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive.file'
+];
+const POLLING_INTERVAL = 1800000; // 30 minutes
+
+async function createCompletedFolder(drive, parentFolderId) {
+  try {
+    // Check if completed folder exists
+    const response = await drive.files.list({
+      q: `name = 'completed' and '${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder'`,
+      fields: 'files(id, name)',
+    });
+
+    if (response.data.files.length > 0) {
+      return response.data.files[0].id;
+    }
+
+    // Create new completed folder
+    const folderMetadata = {
+      name: 'completed',
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentFolderId]
+    };
+
+    const folder = await drive.files.create({
+      resource: folderMetadata,
+      fields: 'id'
+    });
+
+    return folder.data.id;
+  } catch (error) {
+    console.error('Error creating completed folder:', error);
+    throw error;
+  }
+}
+
+async function moveFileToCompleted(drive, fileId, completedFolderId) {
+  try {
+    // Get the file's current parents
+    const file = await drive.files.get({
+      fileId: fileId,
+      fields: 'parents'
+    });
+
+    // Move the file to completed folder
+    await drive.files.update({
+      fileId: fileId,
+      addParents: completedFolderId,
+      removeParents: file.data.parents.join(','),
+      fields: 'id, parents'
+    });
+  } catch (error) {
+    console.error('Error moving file to completed folder:', error);
+    throw error;
+  }
+}
 
 async function initializeDriveWatcher(io) {
   try {
-    // Debug logging
     console.log('Initializing Drive Watcher with polling interval:', POLLING_INTERVAL);
-    console.log('Service Account Email:', process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
     
-    // Ensure private key is properly formatted
     const privateKey = process.env.GOOGLE_PRIVATE_KEY
       ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
       : undefined;
@@ -27,89 +79,53 @@ async function initializeDriveWatcher(io) {
       scopes: SCOPES,
     });
 
-    // Test the authentication
-    try {
-      await auth.authorize();
-      console.log('Successfully authenticated with Google');
-    } catch (authError) {
-      console.error('Authentication failed:', authError);
-      throw authError;
-    }
+    await auth.authorize();
+    console.log('Successfully authenticated with Google');
 
     const drive = google.drive({ version: 'v3', auth });
-    let lastCheckedTime = new Date(Date.now() - 60000).toISOString(); // Start checking from 1 minute ago
+    const completedFolderId = await createCompletedFolder(drive, process.env.FOLDER_ID);
 
     setInterval(async () => {
       try {
-        console.log('Checking for new files since:', lastCheckedTime);
-        
-        // Test the drive API with a simple query first
-        const testQuery = await drive.files.list({
-          pageSize: 1,
-          fields: 'files(id, name)',
-        });
-        
-        console.log('Test query successful');
-
-        // Proceed with the actual file check
+        // Check for any MP4 files in the main folder
         const response = await drive.files.list({
-          q: `mimeType contains 'video/mp4' and modifiedTime > '${lastCheckedTime}' and '${process.env.FOLDER_ID}' in parents`,
+          q: `mimeType contains 'video/mp4' and '${process.env.FOLDER_ID}' in parents and '${completedFolderId}' not in parents`,
           fields: 'files(id, name, webViewLink)',
           pageSize: 10,
         });
 
-        const newFiles = response.data.files;
-        console.log('API Response:', JSON.stringify(response.data, null, 2));
+        const files = response.data.files;
+        console.log(`Found ${files.length} files to process`);
 
-        if (newFiles && newFiles.length > 0) {
-          console.log(`Found ${newFiles.length} new files`);
-          for (const file of newFiles) {
-            try {
-              console.log(`Processing file: ${file.name}`);
-              // Create initial record in Supabase
-              const record = await createTranscriptionRecord(file.id, file.name);
-              console.log('Created Supabase record:', record);
-              
-              // Emit new pending transcription to clients
-              io.emit('newPendingTranscription', record);
-              console.log('Emitted newPendingTranscription event');
-              
-              // Process the transcription
-              const transcription = await transcribeVideo(file.id, drive);
-              console.log('Generated transcription');
-              
-              // Update record with transcription
-              const updatedRecord = await updateTranscription(file.id, transcription);
-              console.log('Updated Supabase record');
-              
-              // Emit completed transcription to clients
-              io.emit('transcriptionComplete', updatedRecord);
-              console.log('Emitted transcriptionComplete event');
-            } catch (fileError) {
-              console.error(`Error processing file ${file.name}:`, fileError);
-              console.error('Error details:', fileError.message);
-              if (fileError.response) {
-                console.error('Error response:', fileError.response.data);
-              }
-            }
+        for (const file of files) {
+          try {
+            console.log(`Processing file: ${file.name}`);
+            const record = await createTranscriptionRecord(file.id, file.name);
+            io.emit('newPendingTranscription', record);
+            
+            const transcription = await transcribeVideo(file.id, drive);
+            const updatedRecord = await updateTranscription(file.id, transcription);
+            
+            // Move file to completed folder
+            await moveFileToCompleted(drive, file.id, completedFolderId);
+            
+            io.emit('transcriptionComplete', updatedRecord);
+            console.log(`Completed processing ${file.name}`);
+          } catch (fileError) {
+            console.error(`Error processing file ${file.name}:`, fileError);
           }
         }
-
-        lastCheckedTime = new Date().toISOString();
       } catch (error) {
-        console.error('Drive API Error:', {
-          message: error.message,
-          code: error.code,
-          errors: error.errors,
-          response: error.response?.data,
-        });
+        console.error('Drive API Error:', error);
       }
     }, POLLING_INTERVAL);
 
   } catch (error) {
     console.error('Fatal Drive Watcher Error:', error);
-    throw error; // Rethrow to trigger app restart
+    throw error;
   }
 }
 
-module.exports = { initializeDriveWatcher }; 
+module.exports = {
+  initializeDriveWatcher
+}; 

@@ -8,6 +8,15 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
+// Enable CORS middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
 // Basic error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -24,17 +33,20 @@ app.get('/ping', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Detailed CORS setup
+// Detailed Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:5173',
-      'https://gdrive-to-gemini-jbl9um82d-roberts-projects-19fe2013.vercel.app',
-      'https://gdrive-to-gemini-client.vercel.app'
-    ],
+    origin: "*",
     methods: ["GET", "POST"],
+    allowedHeaders: ["my-custom-header"],
     credentials: true
-  }
+  },
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  upgradeTimeout: 30000,
+  allowUpgrades: true,
+  cookie: false
 });
 
 const PORT = process.env.PORT || 3000;

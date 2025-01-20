@@ -36,31 +36,54 @@ app.get('/ping', (req, res) => {
 // Detailed Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["my-custom-header"],
+    origin: [
+      "https://gdrive-to-gemini-3cs.e2013.vercel.app",
+      "http://localhost:5173"
+    ],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
   },
-  transports: ['websocket', 'polling'],
+  transports: ['polling'], // Force polling only for now
+  allowEIO3: true, // Enable Engine.IO 3 compatibility
   pingTimeout: 60000,
   pingInterval: 25000,
   upgradeTimeout: 30000,
-  allowUpgrades: true,
+  allowUpgrades: false, // Disable upgrades for now
   cookie: false
+});
+
+// Add connection event logging
+io.engine.on("connection_error", (err) => {
+  console.log("Connection error:", {
+    req: err.req,
+    code: err.code,
+    message: err.message,
+    context: err.context
+  });
 });
 
 const PORT = process.env.PORT || 3000;
 
 // Add error handling for socket connections
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  console.log('Client connected:', {
+    id: socket.id,
+    transport: socket.conn.transport.name,
+    headers: socket.handshake.headers,
+    query: socket.handshake.query
+  });
   
   socket.on('error', (error) => {
     console.error('Socket error:', error);
   });
   
   socket.on('disconnect', (reason) => {
-    console.log('Client disconnected:', socket.id, 'Reason:', reason);
+    console.log('Client disconnected:', {
+      id: socket.id,
+      reason: reason,
+      wasConnected: socket.connected
+    });
   });
 });
 

@@ -10,10 +10,15 @@ const server = http.createServer(app);
 
 // Enable CORS middleware
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Origin', 'https://gdrive-to-gemini-jqxyd4dki-roberts-projects-19fe2013.vercel.app');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
   next();
 });
 
@@ -37,20 +42,19 @@ app.get('/ping', (req, res) => {
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://gdrive-to-gemini-3cs.e2013.vercel.app",
+      "https://gdrive-to-gemini-jqxyd4dki-roberts-projects-19fe2013.vercel.app",
       "http://localhost:5173"
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
+    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   },
-  transports: ['polling'], // Force polling only for now
-  allowEIO3: true, // Enable Engine.IO 3 compatibility
+  transports: ['polling'],
+  allowEIO3: true,
   pingTimeout: 60000,
-  pingInterval: 25000,
-  upgradeTimeout: 30000,
-  allowUpgrades: false, // Disable upgrades for now
-  cookie: false
+  pingInterval: 25000
 });
 
 // Add connection event logging

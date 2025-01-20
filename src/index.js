@@ -19,6 +19,11 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
+// Add a ping endpoint
+app.get('/ping', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Detailed CORS setup
 const io = new Server(server, {
   cors: {

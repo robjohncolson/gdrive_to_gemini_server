@@ -64,8 +64,14 @@ async function moveFileToCompleted(drive, fileId, completedFolderId) {
 async function processFiles(drive, completedFolderId, io) {
   try {
     // Check for any MP4 files in the main folder
+    const query = [
+      "mimeType contains 'video/mp4'",
+      `'${process.env.FOLDER_ID}' in parents`,
+      `'${completedFolderId}' not in parents`
+    ].join(' and ');
+
     const response = await drive.files.list({
-      q: `mimeType contains 'video/mp4' and '${process.env.FOLDER_ID}' in parents and '${completedFolderId}' not in parents`,
+      q: query,
       fields: 'files(id, name, webViewLink)',
       pageSize: 10,
     });
@@ -93,6 +99,9 @@ async function processFiles(drive, completedFolderId, io) {
     }
   } catch (error) {
     console.error('Drive API Error:', error);
+    if (error.response) {
+      console.error('Error response:', error.response.data);
+    }
   }
 }
 

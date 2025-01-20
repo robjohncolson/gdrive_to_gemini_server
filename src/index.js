@@ -10,8 +10,9 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  'https://gdrive-to-gemini.vercel.app',
-  'http://localhost:5173'
+  "https://gdrive-to-gemini-5srbzrkqy-roberts-projects-19fe2013.vercel.app",
+  "https://gdrive-to-gemini.vercel.app",
+  "http://localhost:5173"
 ];
 
 // Enable CORS middleware
@@ -21,7 +22,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
   }
   
   if (req.method === 'OPTIONS') {
@@ -49,11 +50,20 @@ app.get('/ping', (req, res) => {
 // Detailed Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: "https://gdrive-to-gemini-5ox1cun5u-roberts-projects-19fe2013.vercel.app",
+    origin: [
+      "https://gdrive-to-gemini-5srbzrkqy-roberts-projects-19fe2013.vercel.app",
+      "https://gdrive-to-gemini.vercel.app",
+      "http://localhost:5173"
+    ],
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: true,
+    allowedHeaders: ["Content-Type"]
   },
-  path: '/socket.io/'
+  path: '/socket.io/',
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  allowEIO3: true
 });
 
 // Add connection event logging

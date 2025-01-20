@@ -2,6 +2,7 @@ const { google } = require('googleapis');
 const { JWT } = require('google-auth-library');
 const { transcribeVideo } = require('./geminiService');
 const { createTranscriptionRecord, updateTranscription } = require('./supabaseService');
+const { supabase } = require('./supabaseService');
 
 const SCOPES = [
   'https://www.googleapis.com/auth/drive.readonly',

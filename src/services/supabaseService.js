@@ -108,6 +108,7 @@ async function getTranscriptions() {
 }
 
 module.exports = {
+  supabase,
   testConnection,
   createTranscriptionRecord,
   updateTranscription,

@@ -8,21 +8,20 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  'https://gdrive-to-gemini.vercel.app',
+  'http://localhost:5173'
+];
+
 // Enable CORS middleware
 app.use((req, res, next) => {
-  const allowedOrigins = [
-    'https://gdrive-to-gemini-5ox1cun5u-roberts-projects-19fe2013.vercel.app',
-    'http://localhost:5173'
-  ];
   const origin = req.headers.origin;
-  
   if (allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   }
-  
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
     return res.status(204).end();

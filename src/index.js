@@ -37,63 +37,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Replace the current health check endpoint with this:
-app.get('/health', async (req, res) => {
-  try {
-    // Check Supabase connection
-    const supabaseConnected = await testConnection();
-    if (!supabaseConnected) {
-      return res.status(503).json({
-        status: 'unhealthy',
-        error: 'Supabase connection failed',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Check Google Drive API auth
-    const privateKey = process.env.GOOGLE_PRIVATE_KEY
-      ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
-      : undefined;
-
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !privateKey) {
-      return res.status(503).json({
-        status: 'unhealthy',
-        error: 'Google credentials not configured',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Check Gemini API key
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(503).json({
-        status: 'unhealthy',
-        error: 'Gemini API key not configured',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    res.status(200).json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      services: {
-        supabase: 'connected',
-        google: 'configured',
-        gemini: 'configured'
-      }
-    });
-  } catch (error) {
-    console.error('Health check failed:', error);
-    res.status(503).json({
-      status: 'unhealthy',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// Add a ping endpoint
+// Add this immediately after creating the app
 app.get('/ping', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ status: 'ok' });
 });
 
 // Detailed Socket.IO setup

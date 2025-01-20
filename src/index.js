@@ -63,12 +63,22 @@ app.get('/health', async (req, res) => {
       });
     }
 
+    // Check Gemini API key
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({
+        status: 'unhealthy',
+        error: 'Gemini API key not configured',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     res.status(200).json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       services: {
         supabase: 'connected',
-        google: 'configured'
+        google: 'configured',
+        gemini: 'configured'
       }
     });
   } catch (error) {

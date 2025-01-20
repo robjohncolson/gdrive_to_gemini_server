@@ -7,24 +7,29 @@ async function transcribeVideo(fileId, drive) {
   try {
     console.log('Transcription requested for file:', fileId);
     
-    // Get the file metadata and content
-    const file = await drive.files.get({
+    // Get the file content as a readable stream
+    const response = await drive.files.get({
       fileId: fileId,
-      fields: 'webViewLink,name'
+      alt: 'media'
+    }, {
+      responseType: 'arraybuffer'
     });
+
+    // Convert array buffer to base64
+    const base64Data = Buffer.from(response.data).toString('base64');
 
     // Initialize the model
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
-    // Generate transcription using the webViewLink
+    // Generate transcription using the actual video data
     const result = await model.generateContent({
       contents: [{
         parts: [{
-          text: "Please transcribe this video content and dialogue from the following URL:",
+          text: "Please transcribe this video content and dialogue:",
         }, {
           inlineData: {
             mimeType: "video/mp4",
-            data: file.data.webViewLink
+            data: base64Data
           }
         }]
       }]

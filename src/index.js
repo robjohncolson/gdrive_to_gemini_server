@@ -1,14 +1,12 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { initializeDriveWatcher } = require('./services/driveService');
-const { testConnection } = require('./services/supabaseService');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
 
-// Add ping endpoint first, before any middleware
+// Add ping endpoint first, before any middleware or imports
 app.get('/ping', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
@@ -20,9 +18,13 @@ server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-// Initialize services after server is running
-const initializeServices = async () => {
+// Delay loading services that might exit the process
+setTimeout(async () => {
   try {
+    const { initializeDriveWatcher } = require('./services/driveService');
+    const { testConnection } = require('./services/supabaseService');
+    
+    // Initialize Socket.IO after server is running
     const io = new Server(server, {
       cors: {
         origin: [
@@ -35,32 +37,24 @@ const initializeServices = async () => {
       }
     });
 
+    // Initialize services
     const supabaseConnected = await testConnection();
     if (!supabaseConnected) {
       console.error('Failed to connect to Supabase');
-      return;
+    } else {
+      await initializeDriveWatcher(io);
     }
-
-    await initializeDriveWatcher(io);
   } catch (error) {
     console.error('Service initialization failed:', error);
   }
-};
+}, 1000);
 
-// Start service initialization after a short delay
-setTimeout(initializeServices, 1000);
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
-// Global error handling
+// Error handling
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
 });
 
+// Global error handling
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 }); 

@@ -102,7 +102,8 @@ const io = new Server(server, {
   transports: ['websocket', 'polling'],
   pingTimeout: 60000,
   pingInterval: 25000,
-  allowEIO3: true
+  allowEIO3: true,
+  connectTimeout: 45000
 });
 
 // Add connection event logging
@@ -137,6 +138,9 @@ io.on('connection', (socket) => {
       wasConnected: socket.connected
     });
   });
+
+  // Acknowledge connection
+  socket.emit('connected', { status: 'ok' });
 });
 
 // Add error handling for the server

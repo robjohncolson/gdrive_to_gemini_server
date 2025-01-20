@@ -24,7 +24,8 @@ const io = new Server(server, {
   cors: {
     origin: [
       'http://localhost:5173',
-      'https://gdrive-to-gemini-6yrtipfzr-roberts-projects-19fe2013.vercel.app'
+      'https://gdrive-to-gemini-jbl9um82d-roberts-projects-19fe2013.vercel.app',
+      'https://gdrive-to-gemini-client.vercel.app'
     ],
     methods: ["GET", "POST"],
     credentials: true

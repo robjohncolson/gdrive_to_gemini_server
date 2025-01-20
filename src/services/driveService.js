@@ -4,13 +4,13 @@ const { transcribeVideo } = require('./geminiService');
 const { createTranscriptionRecord, updateTranscription } = require('./supabaseService');
 
 const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
-const POLLING_INTERVAL = 30000; // 30 seconds
+const POLLING_INTERVAL = process.env.POLLING_INTERVAL ? parseInt(process.env.POLLING_INTERVAL) : 300000;
 
 async function initializeDriveWatcher(io) {
   try {
     // Debug logging
+    console.log('Initializing Drive Watcher with polling interval:', POLLING_INTERVAL);
     console.log('Service Account Email:', process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
-    console.log('Private Key exists:', !!process.env.GOOGLE_PRIVATE_KEY);
     
     // Ensure private key is properly formatted
     const privateKey = process.env.GOOGLE_PRIVATE_KEY
@@ -37,17 +37,30 @@ async function initializeDriveWatcher(io) {
     }
 
     const drive = google.drive({ version: 'v3', auth });
-    let lastCheckedTime = new Date().toISOString();
+    let lastCheckedTime = new Date(Date.now() - 60000).toISOString(); // Start checking from 1 minute ago
 
     setInterval(async () => {
       try {
-        console.log('Checking for new files...');
+        console.log('Checking for new files since:', lastCheckedTime);
+        
+        // Test the drive API with a simple query first
+        const testQuery = await drive.files.list({
+          pageSize: 1,
+          fields: 'files(id, name)',
+        });
+        
+        console.log('Test query successful');
+
+        // Proceed with the actual file check
         const response = await drive.files.list({
           q: `mimeType contains 'video/mp4' and modifiedTime > '${lastCheckedTime}' and '${process.env.FOLDER_ID}' in parents`,
           fields: 'files(id, name, webViewLink)',
+          pageSize: 10,
         });
 
         const newFiles = response.data.files;
+        console.log('API Response:', JSON.stringify(response.data, null, 2));
+
         if (newFiles && newFiles.length > 0) {
           console.log(`Found ${newFiles.length} new files`);
           for (const file of newFiles) {
@@ -84,26 +97,18 @@ async function initializeDriveWatcher(io) {
 
         lastCheckedTime = new Date().toISOString();
       } catch (error) {
-        console.error('Error checking for new files:', error);
-        console.error('Error details:', error.message);
-        if (error.response) {
-          console.error('Error response:', error.response.data);
-        }
-        if (error.stack) {
-          console.error('Stack trace:', error.stack);
-        }
+        console.error('Drive API Error:', {
+          message: error.message,
+          code: error.code,
+          errors: error.errors,
+          response: error.response?.data,
+        });
       }
     }, POLLING_INTERVAL);
 
   } catch (error) {
-    console.error('Error initializing drive watcher:', error);
-    console.error('Error details:', error.message);
-    if (error.response) {
-      console.error('Error response:', error.response.data);
-    }
-    if (error.stack) {
-      console.error('Stack trace:', error.stack);
-    }
+    console.error('Fatal Drive Watcher Error:', error);
+    throw error; // Rethrow to trigger app restart
   }
 }
 

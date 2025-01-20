@@ -1,16 +1,18 @@
 const { createClient } = require('@supabase/supabase-js');
 
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.error('Missing Supabase credentials in environment variables');
   process.exit(1);
 }
 
+// Use service role key instead of anon key for backend operations
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
   {
     auth: {
-      persistSession: false
+      persistSession: false,
+      autoRefreshToken: false
     }
   }
 );

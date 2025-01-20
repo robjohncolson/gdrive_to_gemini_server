@@ -63,20 +63,24 @@ async function moveFileToCompleted(drive, fileId, completedFolderId) {
 
 async function processFiles(drive, completedFolderId, io) {
   try {
-    // Check for any MP4 files in the main folder
+    // Build the search query according to Drive API syntax
     const query = [
-      "mimeType contains 'video/mp4'",
+      "mimeType = 'video/mp4'",  // Exact match for MIME type
       `'${process.env.FOLDER_ID}' in parents`,
-      `'${completedFolderId}' not in parents`
-    ].join(' and ');
+      `not '${completedFolderId}' in parents`  // Proper NOT syntax
+    ].join(' and ').trim();
+
+    console.log('Executing Drive API query:', query); // Debug log
 
     const response = await drive.files.list({
       q: query,
       fields: 'files(id, name, webViewLink)',
       pageSize: 10,
+      spaces: 'drive',
+      orderBy: 'modifiedTime desc'
     });
 
-    const files = response.data.files;
+    const files = response.data.files || [];
     console.log(`Found ${files.length} files to process`);
 
     for (const file of files) {
@@ -88,19 +92,18 @@ async function processFiles(drive, completedFolderId, io) {
         const transcription = await transcribeVideo(file.id, drive);
         const updatedRecord = await updateTranscription(file.id, transcription);
         
-        // Move file to completed folder
         await moveFileToCompleted(drive, file.id, completedFolderId);
         
         io.emit('transcriptionComplete', updatedRecord);
-        console.log(`Completed processing ${file.name}`);
+        console.log(`Successfully processed ${file.name}`);
       } catch (fileError) {
         console.error(`Error processing file ${file.name}:`, fileError);
       }
     }
   } catch (error) {
     console.error('Drive API Error:', error);
-    if (error.response) {
-      console.error('Error response:', error.response.data);
+    if (error.response?.data) {
+      console.error('Error details:', JSON.stringify(error.response.data, null, 2));
     }
   }
 }

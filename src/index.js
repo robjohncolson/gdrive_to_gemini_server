@@ -49,15 +49,12 @@ app.get('/ping', (req, res) => {
 // Detailed Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://gdrive-to-gemini-5ox1cun5u-roberts-projects-19fe2013.vercel.app",
-      "http://localhost:5173"
-    ],
+    origin: "*",
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Origin"],
     credentials: true
   },
-  transports: ['polling', 'websocket'],
+  transports: ['websocket', 'polling'],
   path: '/socket.io/',
   allowEIO3: true,
   pingTimeout: 60000,

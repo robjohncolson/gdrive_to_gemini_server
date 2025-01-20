@@ -8,7 +8,7 @@ async function transcribeVideo(fileId, drive) {
     console.log('Transcription requested for file:', fileId);
     
     // Get the file content as a readable stream
-    const response = await drive.files.get({
+    const fileResponse = await drive.files.get({
       fileId: fileId,
       alt: 'media'
     }, {
@@ -16,7 +16,7 @@ async function transcribeVideo(fileId, drive) {
     });
 
     // Convert array buffer to base64
-    const base64Data = Buffer.from(response.data).toString('base64');
+    const base64Data = Buffer.from(fileResponse.data).toString('base64');
 
     // Initialize the model
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
@@ -35,8 +35,7 @@ async function transcribeVideo(fileId, drive) {
       }]
     });
 
-    const response = await result.response;
-    return response.text();
+    return result.response.text();
   } catch (error) {
     console.error('Error in transcription:', error);
     throw error;

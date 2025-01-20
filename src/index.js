@@ -45,16 +45,25 @@ setTimeout(async () => {
       await initializeDriveWatcher(io);
     }
   } catch (error) {
-    console.error('Service initialization failed:', error);
+    console.error('Service initialization failed:', {
+      error: error.message,
+      stack: error.stack
+    });
   }
 }, 1000);
 
 // Error handling
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  console.error('Uncaught Exception:', {
+    error: error.message,
+    stack: error.stack
+  });
 });
 
 // Global error handling
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('Unhandled Rejection:', {
+    reason: reason?.message || reason,
+    stack: reason?.stack
+  });
 }); 

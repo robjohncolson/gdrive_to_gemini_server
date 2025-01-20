@@ -48,40 +48,61 @@ async function initializeDriveWatcher(io) {
         });
 
         const newFiles = response.data.files;
-        if (newFiles.length > 0) {
+        if (newFiles && newFiles.length > 0) {
           console.log(`Found ${newFiles.length} new files`);
           for (const file of newFiles) {
-            console.log(`Processing file: ${file.name}`);
-            // Create initial record in Supabase
-            const record = await createTranscriptionRecord(file.id, file.name);
-            
-            // Emit new pending transcription to clients
-            io.emit('newPendingTranscription', record);
-            
-            // Process the transcription
-            const transcription = await transcribeVideo(file.id, drive);
-            
-            // Update record with transcription
-            const updatedRecord = await updateTranscription(file.id, transcription);
-            
-            // Emit completed transcription to clients
-            io.emit('transcriptionComplete', updatedRecord);
+            try {
+              console.log(`Processing file: ${file.name}`);
+              // Create initial record in Supabase
+              const record = await createTranscriptionRecord(file.id, file.name);
+              console.log('Created Supabase record:', record);
+              
+              // Emit new pending transcription to clients
+              io.emit('newPendingTranscription', record);
+              console.log('Emitted newPendingTranscription event');
+              
+              // Process the transcription
+              const transcription = await transcribeVideo(file.id, drive);
+              console.log('Generated transcription');
+              
+              // Update record with transcription
+              const updatedRecord = await updateTranscription(file.id, transcription);
+              console.log('Updated Supabase record');
+              
+              // Emit completed transcription to clients
+              io.emit('transcriptionComplete', updatedRecord);
+              console.log('Emitted transcriptionComplete event');
+            } catch (fileError) {
+              console.error(`Error processing file ${file.name}:`, fileError);
+              console.error('Error details:', fileError.message);
+              if (fileError.response) {
+                console.error('Error response:', fileError.response.data);
+              }
+            }
           }
         }
 
         lastCheckedTime = new Date().toISOString();
       } catch (error) {
         console.error('Error checking for new files:', error);
+        console.error('Error details:', error.message);
         if (error.response) {
           console.error('Error response:', error.response.data);
+        }
+        if (error.stack) {
+          console.error('Stack trace:', error.stack);
         }
       }
     }, POLLING_INTERVAL);
 
   } catch (error) {
     console.error('Error initializing drive watcher:', error);
+    console.error('Error details:', error.message);
     if (error.response) {
       console.error('Error response:', error.response.data);
+    }
+    if (error.stack) {
+      console.error('Stack trace:', error.stack);
     }
   }
 }

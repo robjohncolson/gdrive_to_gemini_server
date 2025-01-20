@@ -12,7 +12,6 @@
     "dotenv": "^16.3.1",
     "socket.io": "^4.7.2",
     "google-auth-library": "^9.0.0",
-    "@google/drive": "^0.2.0",
     "googleapis": "^128.0.0",
     "@supabase/supabase-js": "^2.39.0"
   },

@@ -61,9 +61,44 @@ async function moveFileToCompleted(drive, fileId, completedFolderId) {
   }
 }
 
+async function processFiles(drive, completedFolderId, io) {
+  try {
+    // Check for any MP4 files in the main folder
+    const response = await drive.files.list({
+      q: `mimeType contains 'video/mp4' and '${process.env.FOLDER_ID}' in parents and '${completedFolderId}' not in parents`,
+      fields: 'files(id, name, webViewLink)',
+      pageSize: 10,
+    });
+
+    const files = response.data.files;
+    console.log(`Found ${files.length} files to process`);
+
+    for (const file of files) {
+      try {
+        console.log(`Processing file: ${file.name}`);
+        const record = await createTranscriptionRecord(file.id, file.name);
+        io.emit('newPendingTranscription', record);
+        
+        const transcription = await transcribeVideo(file.id, drive);
+        const updatedRecord = await updateTranscription(file.id, transcription);
+        
+        // Move file to completed folder
+        await moveFileToCompleted(drive, file.id, completedFolderId);
+        
+        io.emit('transcriptionComplete', updatedRecord);
+        console.log(`Completed processing ${file.name}`);
+      } catch (fileError) {
+        console.error(`Error processing file ${file.name}:`, fileError);
+      }
+    }
+  } catch (error) {
+    console.error('Drive API Error:', error);
+  }
+}
+
 async function initializeDriveWatcher(io) {
   try {
-    console.log('Initializing Drive Watcher with polling interval:', POLLING_INTERVAL);
+    console.log('Initializing Drive Watcher');
     
     const privateKey = process.env.GOOGLE_PRIVATE_KEY
       ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
@@ -85,39 +120,15 @@ async function initializeDriveWatcher(io) {
     const drive = google.drive({ version: 'v3', auth });
     const completedFolderId = await createCompletedFolder(drive, process.env.FOLDER_ID);
 
+    // Initial check on startup
+    console.log('Performing initial file check...');
+    await processFiles(drive, completedFolderId, io);
+    console.log('Initial check complete');
+
+    // Set up periodic checking
     setInterval(async () => {
-      try {
-        // Check for any MP4 files in the main folder
-        const response = await drive.files.list({
-          q: `mimeType contains 'video/mp4' and '${process.env.FOLDER_ID}' in parents and '${completedFolderId}' not in parents`,
-          fields: 'files(id, name, webViewLink)',
-          pageSize: 10,
-        });
-
-        const files = response.data.files;
-        console.log(`Found ${files.length} files to process`);
-
-        for (const file of files) {
-          try {
-            console.log(`Processing file: ${file.name}`);
-            const record = await createTranscriptionRecord(file.id, file.name);
-            io.emit('newPendingTranscription', record);
-            
-            const transcription = await transcribeVideo(file.id, drive);
-            const updatedRecord = await updateTranscription(file.id, transcription);
-            
-            // Move file to completed folder
-            await moveFileToCompleted(drive, file.id, completedFolderId);
-            
-            io.emit('transcriptionComplete', updatedRecord);
-            console.log(`Completed processing ${file.name}`);
-          } catch (fileError) {
-            console.error(`Error processing file ${file.name}:`, fileError);
-          }
-        }
-      } catch (error) {
-        console.error('Drive API Error:', error);
-      }
+      console.log('Running periodic check...');
+      await processFiles(drive, completedFolderId, io);
     }, POLLING_INTERVAL);
 
   } catch (error) {

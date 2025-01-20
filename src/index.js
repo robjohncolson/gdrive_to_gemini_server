@@ -43,7 +43,11 @@ app.get('/health', async (req, res) => {
     // Check Supabase connection
     const supabaseConnected = await testConnection();
     if (!supabaseConnected) {
-      throw new Error('Supabase connection failed');
+      return res.status(503).json({
+        status: 'unhealthy',
+        error: 'Supabase connection failed',
+        timestamp: new Date().toISOString()
+      });
     }
 
     // Check Google Drive API auth
@@ -52,7 +56,11 @@ app.get('/health', async (req, res) => {
       : undefined;
 
     if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !privateKey) {
-      throw new Error('Google credentials not configured');
+      return res.status(503).json({
+        status: 'unhealthy',
+        error: 'Google credentials not configured',
+        timestamp: new Date().toISOString()
+      });
     }
 
     res.status(200).json({

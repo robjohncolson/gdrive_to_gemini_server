@@ -64,14 +64,13 @@ async function moveFileToCompleted(drive, fileId, completedFolderId) {
 
 async function processFiles(drive, completedFolderId, io) {
   try {
-    // Build the search query according to Drive API syntax
     const query = [
-      "mimeType = 'video/mp4'",  // Exact match for MIME type
+      "mimeType = 'video/mp4'",
       `'${process.env.FOLDER_ID}' in parents`,
-      `not '${completedFolderId}' in parents`  // Proper NOT syntax
+      `not '${completedFolderId}' in parents`
     ].join(' and ').trim();
 
-    console.log('Executing Drive API query:', query); // Debug log
+    console.log('Executing Drive API query:', query);
 
     const response = await drive.files.list({
       q: query,
@@ -87,9 +86,47 @@ async function processFiles(drive, completedFolderId, io) {
     for (const file of files) {
       try {
         console.log(`Processing file: ${file.name}`);
-        const record = await createTranscriptionRecord(file.id, file.name);
-        io.emit('newPendingTranscription', record);
         
+        // Check if record exists and get its status
+        const { data: existingRecord, error: queryError } = await supabase
+          .from('video_transcriptions')
+          .select('*')
+          .eq('file_id', file.id)
+          .maybeSingle();
+
+        if (queryError) {
+          console.error('Error checking existing record:', queryError);
+          continue;
+        }
+
+        let record;
+        if (existingRecord) {
+          console.log(`Found existing record for ${file.name} with status: ${existingRecord.status}`);
+          if (existingRecord.status === 'completed') {
+            console.log(`Skipping completed file: ${file.name}`);
+            continue;
+          }
+          record = existingRecord;
+        } else {
+          const { data: newRecord, error: insertError } = await supabase
+            .from('video_transcriptions')
+            .insert([{ 
+              file_id: file.id, 
+              file_name: file.name,
+              status: 'pending',
+              created_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Error creating record:', insertError);
+            continue;
+          }
+          record = newRecord;
+          io.emit('newPendingTranscription', record);
+        }
+
         const transcription = await transcribeVideo(file.id, drive);
         const updatedRecord = await updateTranscription(file.id, transcription);
         

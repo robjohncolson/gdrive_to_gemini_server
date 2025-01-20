@@ -8,10 +8,18 @@ const POLLING_INTERVAL = 30000; // 30 seconds
 
 async function initializeDriveWatcher(io) {
   try {
-    // Clean and format the private key
+    // Debug logging
+    console.log('Service Account Email:', process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
+    console.log('Private Key exists:', !!process.env.GOOGLE_PRIVATE_KEY);
+    
+    // Ensure private key is properly formatted
     const privateKey = process.env.GOOGLE_PRIVATE_KEY
-      ? process.env.GOOGLE_PRIVATE_KEY.split(String.raw`\n`).join('\n')
+      ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
       : undefined;
+
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !privateKey) {
+      throw new Error('Missing required Google credentials');
+    }
 
     const auth = new JWT({
       email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -19,11 +27,21 @@ async function initializeDriveWatcher(io) {
       scopes: SCOPES,
     });
 
+    // Test the authentication
+    try {
+      await auth.authorize();
+      console.log('Successfully authenticated with Google');
+    } catch (authError) {
+      console.error('Authentication failed:', authError);
+      throw authError;
+    }
+
     const drive = google.drive({ version: 'v3', auth });
     let lastCheckedTime = new Date().toISOString();
 
     setInterval(async () => {
       try {
+        console.log('Checking for new files...');
         const response = await drive.files.list({
           q: `mimeType contains 'video/mp4' and modifiedTime > '${lastCheckedTime}' and '${process.env.FOLDER_ID}' in parents`,
           fields: 'files(id, name, webViewLink)',
@@ -54,15 +72,17 @@ async function initializeDriveWatcher(io) {
         lastCheckedTime = new Date().toISOString();
       } catch (error) {
         console.error('Error checking for new files:', error);
-        console.error('Error details:', error.message);
-        if (error.stack) console.error('Stack trace:', error.stack);
+        if (error.response) {
+          console.error('Error response:', error.response.data);
+        }
       }
     }, POLLING_INTERVAL);
 
   } catch (error) {
     console.error('Error initializing drive watcher:', error);
-    console.error('Error details:', error.message);
-    if (error.stack) console.error('Stack trace:', error.stack);
+    if (error.response) {
+      console.error('Error response:', error.response.data);
+    }
   }
 }
 
